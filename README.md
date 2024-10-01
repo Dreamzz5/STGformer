@@ -28,7 +28,7 @@ cd STGformer
 from stgformer import STGformer
 
 # Initialize the model
-model = STGformer(num_nodes=100, input_dim=1, output_dim=1)
+model = STGformer(num_nodes=100, input_dim=3, output_dim=1)
 
 # Prepare your data
 # X: input data, A: adjacency matrix
