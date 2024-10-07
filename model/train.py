@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # -------------------------- set running environment ------------------------- #
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dataset", type=str, default="sd")
+    parser.add_argument("-d", "--dataset", type=str, default="pems08")
     parser.add_argument("-g", "--gpu_num", type=int, default=0)
     parser.add_argument("-m", "--mode", type=str, default="train")
     parser.add_argument("-s", "--shift", action="store_true")
@@ -232,13 +232,13 @@ if __name__ == "__main__":
     set_cpu_num(1)
 
     GPU_ID = args.gpu_num
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPU_ID}"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPU_ID}"
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     dataset = args.dataset
     dataset = dataset.upper()
     data_path = f"../data/{dataset}"
-    model_name = STAEformer.__name__
+    model_name = STGformer.__name__
 
     with open(f"{model_name}.yaml", "r") as f:
         cfg = yaml.safe_load(f)

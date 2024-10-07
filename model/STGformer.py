@@ -1,11 +1,7 @@
 import torch.nn as nn
 import torch
-from torchinfo import summary
-from torch_geometric.nn import TransformerConv
-import faiss
 import numpy as np
-from timm.models.vision_transformer import Mlp, DropPath
-from pyhealth.models import TCNLayer
+from timm.models.vision_transformer import Mlp
 
 
 class FastAttentionLayer(nn.Module):
@@ -130,25 +126,6 @@ class AttentionLayer(nn.Module):
         return x
 
 
-class GraphAttentionLayer(nn.Module):
-    def __init__(self, model_dim, num_heads=8, qkv_bias=False):
-        super().__init__()
-        self.cov = TransformerConv(model_dim, model_dim)
-
-    def forward(self, x, edge_index):
-        bs, steps = x.shape[:2]
-        x = x.reshape(-1, x.size(2), x.size(3))
-        batch_size, num_nodes, _ = x.shape
-        edge_index = edge_index.unsqueeze(0).expand(batch_size, -1, -1)
-        batch_offset = (
-            torch.arange(batch_size, device=edge_index.device).view(-1, 1, 1)
-            * num_nodes
-        )
-        edge_index = (edge_index + batch_offset).view(2, -1)
-        x = x.reshape(-1, x.size(-1))
-        x = self.cov(x, edge_index)
-        x = x.view(bs, steps, num_nodes, -1)
-        return x
 
 
 class ChebGraphConv(nn.Module):
@@ -187,8 +164,6 @@ class SelfAttentionLayer(nn.Module):
         order=2,
     ):
         super().__init__()
-        # self.attn = AttentionLayer(model_dim, num_heads, mask)
-        # self.attn = GraphAttentionLayer(model_dim, num_heads, mask)
         self.locals = ChebGraphConv(model_dim, model_dim, Ks=order, gso=supports[0])
         self.attn = nn.ModuleList(
             [
@@ -224,7 +199,7 @@ class SelfAttentionLayer(nn.Module):
         return x
 
 
-class STAEformer(nn.Module):
+class STGformer(nn.Module):
     def __init__(
         self,
         num_nodes,
@@ -352,13 +327,6 @@ class STAEformer(nn.Module):
         x = torch.cat(
             [x] + [features], dim=-1
         )  # (batch_size, in_steps, num_nodes, model_dim)
-        # x = x.transpose(1, 2).flatten(0, 1)
-        # if self.kernel_size == self.in_steps:
-        #     x = self.temporal_proj(x)[0]
-        #     x = x.reshape(batch_size, self.num_nodes, 1, -1).transpose(1, 2)
-        # else:
-        #     x = self.temporal_proj(x)[1]
-        #     x = x.reshape(batch_size, self.num_nodes, self.in_steps, -1).transpose(1, 2)
         x = self.temporal_proj(x.transpose(1, 3)).transpose(1, 3)
         for attn in self.attn_layers_s:
             x = attn(x)
@@ -372,34 +340,3 @@ class STAEformer(nn.Module):
         )
         out = out.transpose(1, 2)  # (batch_size, out_steps, num_nodes, output_dim)
         return out
-
-
-if __name__ == "__main__":
-    from thop import profile
-
-    # 假设模型已经定义好了
-    num_node = 3834
-    model = STAEformer(num_node, 12, 12, supports=[torch.zeros(num_node, num_node)])
-
-    # 创建一个示例输入
-    dummy_input = torch.zeros(2, 12, num_node, 3)
-
-    # 使用 thop 计算 FLOPs 和参数量
-    macs, params = profile(model, inputs=(dummy_input,))
-
-    print(f"Total FLOPs: {macs}")
-    print(f"Total params: {params}")
-    print("The number of parameters: {}".format(sum([param.nelement() for param in model.parameters()])))
-
-    # 将 FLOPs 转换为更易读的格式
-    def flops_to_string(flops, units="GMac", precision=2):
-        if units == "GMac":
-            return f"{flops/1e9:.{precision}f} GMac"
-        elif units == "MMac":
-            return f"{flops/1e6:.{precision}f} MMac"
-        elif units == "KMac":
-            return f"{flops/1e3:.{precision}f} KMac"
-        else:
-            return f"{flops:.{precision}f} Mac"
-
-    print(f"Total FLOPs: {flops_to_string(macs)}")
