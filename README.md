@@ -28,13 +28,13 @@ cd STGformer
 from stgformer import STGformer
 
 # Initialize the model
-model = STGformer(num_nodes=100, input_dim=3, output_dim=1)
+model = STGformer(num_nodes=100, input_dim=3, output_dim=1, supports = adj_mx)
 
 # Prepare your data
 # X: input data, A: adjacency matrix
 
 # Make predictions
-predictions = model(X, A)
+predictions = model(X)
 ```
 
 ## Cite This Work
