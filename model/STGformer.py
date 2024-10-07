@@ -352,13 +352,6 @@ class STAEformer(nn.Module):
         x = torch.cat(
             [x] + [features], dim=-1
         )  # (batch_size, in_steps, num_nodes, model_dim)
-        # x = x.transpose(1, 2).flatten(0, 1)
-        # if self.kernel_size == self.in_steps:
-        #     x = self.temporal_proj(x)[0]
-        #     x = x.reshape(batch_size, self.num_nodes, 1, -1).transpose(1, 2)
-        # else:
-        #     x = self.temporal_proj(x)[1]
-        #     x = x.reshape(batch_size, self.num_nodes, self.in_steps, -1).transpose(1, 2)
         x = self.temporal_proj(x.transpose(1, 3)).transpose(1, 3)
         for attn in self.attn_layers_s:
             x = attn(x)
@@ -372,34 +365,3 @@ class STAEformer(nn.Module):
         )
         out = out.transpose(1, 2)  # (batch_size, out_steps, num_nodes, output_dim)
         return out
-
-
-if __name__ == "__main__":
-    from thop import profile
-
-    # 假设模型已经定义好了
-    num_node = 3834
-    model = STAEformer(num_node, 12, 12, supports=[torch.zeros(num_node, num_node)])
-
-    # 创建一个示例输入
-    dummy_input = torch.zeros(2, 12, num_node, 3)
-
-    # 使用 thop 计算 FLOPs 和参数量
-    macs, params = profile(model, inputs=(dummy_input,))
-
-    print(f"Total FLOPs: {macs}")
-    print(f"Total params: {params}")
-    print("The number of parameters: {}".format(sum([param.nelement() for param in model.parameters()])))
-
-    # 将 FLOPs 转换为更易读的格式
-    def flops_to_string(flops, units="GMac", precision=2):
-        if units == "GMac":
-            return f"{flops/1e9:.{precision}f} GMac"
-        elif units == "MMac":
-            return f"{flops/1e6:.{precision}f} MMac"
-        elif units == "KMac":
-            return f"{flops/1e3:.{precision}f} KMac"
-        else:
-            return f"{flops:.{precision}f} Mac"
-
-    print(f"Total FLOPs: {flops_to_string(macs)}")
