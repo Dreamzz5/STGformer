@@ -130,25 +130,6 @@ class AttentionLayer(nn.Module):
         return x
 
 
-class GraphAttentionLayer(nn.Module):
-    def __init__(self, model_dim, num_heads=8, qkv_bias=False):
-        super().__init__()
-        self.cov = TransformerConv(model_dim, model_dim)
-
-    def forward(self, x, edge_index):
-        bs, steps = x.shape[:2]
-        x = x.reshape(-1, x.size(2), x.size(3))
-        batch_size, num_nodes, _ = x.shape
-        edge_index = edge_index.unsqueeze(0).expand(batch_size, -1, -1)
-        batch_offset = (
-            torch.arange(batch_size, device=edge_index.device).view(-1, 1, 1)
-            * num_nodes
-        )
-        edge_index = (edge_index + batch_offset).view(2, -1)
-        x = x.reshape(-1, x.size(-1))
-        x = self.cov(x, edge_index)
-        x = x.view(bs, steps, num_nodes, -1)
-        return x
 
 
 class ChebGraphConv(nn.Module):
@@ -187,8 +168,6 @@ class SelfAttentionLayer(nn.Module):
         order=2,
     ):
         super().__init__()
-        # self.attn = AttentionLayer(model_dim, num_heads, mask)
-        # self.attn = GraphAttentionLayer(model_dim, num_heads, mask)
         self.locals = ChebGraphConv(model_dim, model_dim, Ks=order, gso=supports[0])
         self.attn = nn.ModuleList(
             [
