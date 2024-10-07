@@ -203,7 +203,7 @@ class SelfAttentionLayer(nn.Module):
         return x
 
 
-class STAEformer(nn.Module):
+class STGformer(nn.Module):
     def __init__(
         self,
         num_nodes,
