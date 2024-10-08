@@ -18,7 +18,7 @@ STGformer is a novel spatiotemporal graph transformer architecture designed for 
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/STGformer.git
+git clone https://github.com/Dreamzz5/STGformer.git
 cd STGformer
 ```
 
