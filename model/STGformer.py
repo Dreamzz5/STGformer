@@ -112,7 +112,7 @@ class AttentionLayer(nn.Module):
 
         self.out_proj = nn.Linear(model_dim, model_dim)
 
-    def forward(self, x, edge_index=None):
+    def forward(self, x):
         query, key, value = self.qkv(x).chunk(3, -1)
         qs = torch.stack(torch.split(query, self.head_dim, dim=-1), dim=-3)
         ks = torch.stack(torch.split(key, self.head_dim, dim=-1), dim=-3)
