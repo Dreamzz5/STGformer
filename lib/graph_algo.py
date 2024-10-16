@@ -18,7 +18,8 @@ def normalize_adj_mx(adj_mx, adj_type, return_type="dense"):
     elif adj_type == "identity":
         adj = [np.diag(np.ones(adj_mx.shape[0])).astype(np.float32)]
     else:
-        return []
+        adj = [adj_mx.astype(np.float32)]
+        return adj
 
     if return_type == "dense":
         adj = [a.astype(np.float32).todense() for a in adj]
