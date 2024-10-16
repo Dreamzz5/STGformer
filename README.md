@@ -1,6 +1,7 @@
 # STGformer: Efficient Spatiotemporal Graph Transformer for Traffic Forecasting
 
 STGformer is a novel spatiotemporal graph transformer architecture designed for efficient and accurate traffic forecasting. It balances the strengths of Graph Convolutional Networks (GCNs) and Transformers, enabling effective modeling of both global and local traffic patterns while maintaining a manageable computational footprint.
+
 ![](img/sd_performance.png)
 
 ## Key Features
