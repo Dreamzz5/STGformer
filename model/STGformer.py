@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 from timm.models.vision_transformer import Mlp
-
+import torch.nn.functional as F
 
 class FastAttentionLayer(nn.Module):
     def __init__(self, model_dim, num_heads=8, qkv_bias=False, kernel=1):
@@ -112,7 +112,7 @@ class AttentionLayer(nn.Module):
 
         self.out_proj = nn.Linear(model_dim, model_dim)
 
-    def forward(self, x):
+    def forward(self, x, edge_index=None):
         query, key, value = self.qkv(x).chunk(3, -1)
         qs = torch.stack(torch.split(query, self.head_dim, dim=-1), dim=-3)
         ks = torch.stack(torch.split(key, self.head_dim, dim=-1), dim=-3)
@@ -128,25 +128,21 @@ class AttentionLayer(nn.Module):
 
 
 
-class ChebGraphConv(nn.Module):
-    def __init__(self, c_in, c_out, Ks, gso):
-        super(ChebGraphConv, self).__init__()
+class GraphPropagate(nn.Module):
+    def __init__(self, Ks, gso, dropout = 0.2):
+        super(GraphPropagate, self).__init__()
         self.Ks = Ks
         self.gso = gso
-
-    def forward(self, x):
+        self.dropout = nn.Dropout(dropout)
+    def forward(self, x, graph):
         if self.Ks < 1:
             raise ValueError(
                 f"ERROR: Ks must be a positive integer, received {self.Ks}."
             )
-
-        x_list = [x]
-        if self.Ks > 1:
-            x_list.append(torch.einsum("hi,btij->bthj", self.gso, x))
-
-        for k in range(2, self.Ks):
-            x_k = 2 * torch.einsum("hi,btij->bthj", self.gso, x_list[-1]) - x_list[-2]
-            x_list.append(x_k)
+        x_k = x; x_list = [x]
+        for k in range(1, self.Ks):
+            x_k = torch.einsum("thi,btij->bthj", graph, x_k.clone())
+            x_list.append(self.dropout(x_k))
 
         return x_list
 
@@ -164,7 +160,7 @@ class SelfAttentionLayer(nn.Module):
         order=2,
     ):
         super().__init__()
-        self.locals = ChebGraphConv(model_dim, model_dim, Ks=order, gso=supports[0])
+        self.locals = GraphPropagate(Ks=order, gso=supports[0])
         self.attn = nn.ModuleList(
             [
                 FastAttentionLayer(model_dim, num_heads, mask, kernel=kernel)
@@ -174,6 +170,10 @@ class SelfAttentionLayer(nn.Module):
         self.pws = nn.ModuleList(
             [nn.Linear(model_dim, model_dim) for _ in range(order)]
         )
+        for i in range(0, order):
+            nn.init.constant_(self.pws[i].weight, 0)
+            nn.init.constant_(self.pws[i].bias, 0)
+
         self.kernel = kernel
         self.fc = Mlp(
             in_features=model_dim,
@@ -184,12 +184,11 @@ class SelfAttentionLayer(nn.Module):
         self.ln1 = nn.LayerNorm(model_dim)
         self.ln2 = nn.LayerNorm(model_dim)
         self.dropout = nn.Dropout(dropout)
-        self.scale = [1, 1, 1]
+        self.scale = [1, 0.01, 0.001]
 
-    def forward(self, x):
-        x_loc = self.locals(x)
-        x_glo = 0
-        c = x
+    def forward(self, x, graph):
+        x_loc = self.locals(x, graph)
+        c = x_glo = x
         for i, z in enumerate(x_loc):
             att_outputs = self.attn[i](z)
             x_glo += att_outputs * self.pws[i](c) * self.scale[i]
@@ -258,7 +257,7 @@ class STGformer(nn.Module):
 
         self.dropout = nn.Dropout(dropout_a)
         # self.dropout = DropPath(dropout_a)
-
+        self.pooling = nn.AvgPool2d(kernel_size=(1, kernel_size[0]), stride=1)
         self.attn_layers_s = nn.ModuleList(
             [
                 SelfAttentionLayer(
@@ -328,8 +327,11 @@ class STGformer(nn.Module):
             [x] + [features], dim=-1
         )  # (batch_size, in_steps, num_nodes, model_dim)
         x = self.temporal_proj(x.transpose(1, 3)).transpose(1, 3)
+        graph = torch.matmul(self.adaptive_embedding, self.adaptive_embedding.transpose(1, 2))
+        graph = self.pooling(graph.transpose(0, 2)).transpose(0, 2)
+        graph = F.softmax(F.relu(graph), dim=-1)
         for attn in self.attn_layers_s:
-            x = attn(x)
+            x = attn(x, graph)
         x = self.encoder_proj(x.transpose(1, 2).flatten(-2))
         for layer in self.encoder:
             x = x + layer(x)
@@ -340,3 +342,5 @@ class STGformer(nn.Module):
         )
         out = out.transpose(1, 2)  # (batch_size, out_steps, num_nodes, output_dim)
         return out
+
+
